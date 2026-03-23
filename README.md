@@ -97,7 +97,209 @@ No single party can move funds. Both must sign.
 
 Team locks up longest = strongest anti-rugpull signal.
 
+## Verification & Security
+
+Everything is public. Verify it yourself.
+
+### Contract Audit
+
+Full self-audit published: [SECURITY-AUDIT.md](SECURITY-AUDIT.md)
+
+**Key findings:**
+| Check | Status | Details |
+|-------|--------|---------|
+| Stuck funds | ✅ Passed | Contract balance is **always 0** — ETH forwards to Safe immediately |
+| Reentrancy | ✅ Passed | State updated before external call, vault is audited Gnosis Safe |
+| Overflow/Underflow | ✅ Passed | Solidity 0.8.24 built-in checks |
+| Access control | ✅ Passed | Owner can only close presale, not withdraw funds |
+| Contribution limits | ✅ Passed | Min 0.01 ETH, max 1 ETH per wallet, hard cap 12.5 ETH |
+| Soft/hard cap logic | ✅ Passed | No timer before soft cap, 5-day timer after |
+| Partial fill at cap | ✅ Passed | Excess ETH returned to sender, not reverted |
+| ERC-20 rescue | ✅ Passed | Accidentally sent tokens can be recovered by multisig |
+| Start time | ✅ Passed | Contributions rejected before scheduled launch time |
+| No selfdestruct | ✅ Passed | Contract is immutable after deployment |
+
+**No critical or high-severity issues found.** Three known limitations documented in the audit.
+
+### Test Results
+
+**34 tests, all passing** — unit tests + fork tests against real Base mainnet.
+
+**Unit tests (28):**
+| Test | What it verifies |
+|------|-----------------|
+| `test_initialState` | All parameters set correctly |
+| `test_contribute` | Basic contribution + vault forwarding |
+| `test_contributeViaReceive` | `receive()` fallback works |
+| `test_ogBonus` | 10% bonus weight for OG wallets |
+| `test_revertBelowMin` | Rejects < 0.01 ETH |
+| `test_revertAboveMax` | Rejects > 1 ETH cumulative per wallet |
+| `test_softCapTriggers` | Timer starts when soft cap is hit |
+| `test_hardCapCloses` | Presale closes at 12.5 ETH |
+| `test_timerExpiry` | Contributions revert after 5-day timer |
+| `test_noTimerBeforeSoftCap` | No expiry before soft cap — presale stays open |
+| `test_vaultReceivesFunds` | Contract balance = 0, vault has everything |
+| `test_getAllContributions` | Data integrity for Clanker airdrop |
+| `test_cannotContributeAfterClose` | Closed presale blocks contributions |
+| `test_partialFillAtHardCap` | Excess ETH returned when hitting cap |
+| `test_partialFillSmallRemaining` | Works with tiny remaining capacity |
+| `test_rescueERC20` | Accidentally sent tokens can be recovered |
+| `test_rescueOnlyOwner` | Only multisig can rescue tokens |
+| `test_contractAlwaysZeroBalance` | Contract never holds ETH |
+| `test_cumulativeMaxEnforced` | Max 1 ETH tracked across multiple txs |
+| `test_ogZeroContributionZeroWeight` | OGs get nothing without contributing |
+| `test_ownerEarlyClose` | Owner can close + funds safe in vault |
+| `test_nonOwnerCannotClose` | Random users can't close presale |
+| `test_doubleClose` | Can't close twice |
+| `test_noDuplicateContributors` | Same wallet counted once |
+| `test_remainingCapacityUpdates` | Remaining capacity view works |
+| `test_cannotContributeBeforeStart` | Rejects contributions before startTime |
+| `test_canContributeAfterStart` | Accepts contributions after startTime |
+| `test_isStartedView` | `isStarted()` and `isActive()` respect startTime |
+
+**Fork tests (6) — against real Base mainnet:**
+| Test | What it verifies |
+|------|-----------------|
+| `test_fork_vaultIsGnosisSafe` | Vault address has contract bytecode (real Safe) |
+| `test_fork_contributeForwardsToSafe` | ETH actually arrives at the real Safe |
+| `test_fork_ogBonusWorks` | 10% bonus calculated correctly with real OG addresses |
+| `test_fork_partialFillReturnsFunds` | Excess ETH returned to real wallets |
+| `test_fork_fullPresaleFlow` | Full lifecycle: contribute → soft cap → hard cap → airdrop data |
+| `test_fork_ownerIsArca` | Owner = arcabot.eth (0x1be9…Adb) |
+
+### How to verify yourself
+
+```bash
+# Clone the repo
+git clone https://github.com/arcabotai/arca-token
+cd arca-token
+
+# Run unit tests
+forge test -vv
+
+# Run fork tests against real Base mainnet (needs RPC URL)
+forge test --fork-url https://base-mainnet.g.alchemy.com/v2/YOUR_KEY -vv
+
+# Read the contract — it's ~200 lines of Solidity
+cat src/ArcaPresaleV2.sol
+```
+
+### On-chain verification
+
+After deployment, the contract will be **verified on BaseScan** — you can read every function and compare it to this repo.
+
+| What | Where |
+|------|-------|
+| Contract source | [src/ArcaPresaleV2.sol](src/ArcaPresaleV2.sol) |
+| Security audit | [SECURITY-AUDIT.md](SECURITY-AUDIT.md) |
+| Unit tests | [test/ArcaPresaleV2.t.sol](test/ArcaPresaleV2.t.sol) |
+| Fork tests | [test/ArcaPresaleV2Fork.t.sol](test/ArcaPresaleV2Fork.t.sol) |
+| OG whitelist | [OG_WHITELIST.md](OG_WHITELIST.md) |
+| Gnosis Safe | [View on Safe{Wallet}](https://app.safe.global/home?safe=base:0x9a0756d4e1b2361d25d99701e1b8ab87ec262692) |
+| vault.arcabot.eth | [Resolve on ENS](https://app.ens.domains/vault.arcabot.eth) |
+
 ## Development
+## Verification & Security
+
+Everything is public. Verify it yourself.
+
+### Contract Audit
+
+Full self-audit published: [SECURITY-AUDIT.md](SECURITY-AUDIT.md)
+
+**Key findings:**
+| Check | Status | Details |
+|-------|--------|---------|
+| Stuck funds | ✅ Passed | Contract balance is **always 0** — ETH forwards to Safe immediately |
+| Reentrancy | ✅ Passed | State updated before external call, vault is audited Gnosis Safe |
+| Overflow/Underflow | ✅ Passed | Solidity 0.8.24 built-in checks |
+| Access control | ✅ Passed | Owner can only close presale, not withdraw funds |
+| Contribution limits | ✅ Passed | Min 0.01 ETH, max 1 ETH per wallet, hard cap 12.5 ETH |
+| Soft/hard cap logic | ✅ Passed | No timer before soft cap, 5-day timer after |
+| Partial fill at cap | ✅ Passed | Excess ETH returned to sender, not reverted |
+| ERC-20 rescue | ✅ Passed | Accidentally sent tokens can be recovered by multisig |
+| Start time | ✅ Passed | Contributions rejected before scheduled launch time |
+| No selfdestruct | ✅ Passed | Contract is immutable after deployment |
+
+**No critical or high-severity issues found.** Three known limitations documented in the audit.
+
+### Test Results
+
+**34 tests, all passing** — unit tests + fork tests against real Base mainnet.
+
+**Unit tests (28):**
+| Test | What it verifies |
+|------|-----------------|
+| `test_initialState` | All parameters set correctly |
+| `test_contribute` | Basic contribution + vault forwarding |
+| `test_contributeViaReceive` | `receive()` fallback works |
+| `test_ogBonus` | 10% bonus weight for OG wallets |
+| `test_revertBelowMin` | Rejects < 0.01 ETH |
+| `test_revertAboveMax` | Rejects > 1 ETH cumulative per wallet |
+| `test_softCapTriggers` | Timer starts when soft cap is hit |
+| `test_hardCapCloses` | Presale closes at 12.5 ETH |
+| `test_timerExpiry` | Contributions revert after 5-day timer |
+| `test_noTimerBeforeSoftCap` | No expiry before soft cap — presale stays open |
+| `test_vaultReceivesFunds` | Contract balance = 0, vault has everything |
+| `test_getAllContributions` | Data integrity for Clanker airdrop |
+| `test_cannotContributeAfterClose` | Closed presale blocks contributions |
+| `test_partialFillAtHardCap` | Excess ETH returned when hitting cap |
+| `test_partialFillSmallRemaining` | Works with tiny remaining capacity |
+| `test_rescueERC20` | Accidentally sent tokens can be recovered |
+| `test_rescueOnlyOwner` | Only multisig can rescue tokens |
+| `test_contractAlwaysZeroBalance` | Contract never holds ETH |
+| `test_cumulativeMaxEnforced` | Max 1 ETH tracked across multiple txs |
+| `test_ogZeroContributionZeroWeight` | OGs get nothing without contributing |
+| `test_ownerEarlyClose` | Owner can close + funds safe in vault |
+| `test_nonOwnerCannotClose` | Random users can't close presale |
+| `test_doubleClose` | Can't close twice |
+| `test_noDuplicateContributors` | Same wallet counted once |
+| `test_remainingCapacityUpdates` | Remaining capacity view works |
+| `test_cannotContributeBeforeStart` | Rejects contributions before startTime |
+| `test_canContributeAfterStart` | Accepts contributions after startTime |
+| `test_isStartedView` | `isStarted()` and `isActive()` respect startTime |
+
+**Fork tests (6) — against real Base mainnet:**
+| Test | What it verifies |
+|------|-----------------|
+| `test_fork_vaultIsGnosisSafe` | Vault address has contract bytecode (real Safe) |
+| `test_fork_contributeForwardsToSafe` | ETH actually arrives at the real Safe |
+| `test_fork_ogBonusWorks` | 10% bonus calculated correctly with real OG addresses |
+| `test_fork_partialFillReturnsFunds` | Excess ETH returned to real wallets |
+| `test_fork_fullPresaleFlow` | Full lifecycle: contribute → soft cap → hard cap → airdrop data |
+| `test_fork_ownerIsArca` | Owner = arcabot.eth (0x1be9…Adb) |
+
+### How to verify yourself
+
+```bash
+# Clone the repo
+git clone https://github.com/arcabotai/arca-token
+cd arca-token
+
+# Run unit tests
+forge test -vv
+
+# Run fork tests against real Base mainnet (needs RPC URL)
+forge test --fork-url https://base-mainnet.g.alchemy.com/v2/YOUR_KEY -vv
+
+# Read the contract — it's ~200 lines of Solidity
+cat src/ArcaPresaleV2.sol
+```
+
+### On-chain verification
+
+After deployment, the contract will be **verified on BaseScan** — you can read every function and compare it to this repo.
+
+| What | Where |
+|------|-------|
+| Contract source | [src/ArcaPresaleV2.sol](src/ArcaPresaleV2.sol) |
+| Security audit | [SECURITY-AUDIT.md](SECURITY-AUDIT.md) |
+| Unit tests | [test/ArcaPresaleV2.t.sol](test/ArcaPresaleV2.t.sol) |
+| Fork tests | [test/ArcaPresaleV2Fork.t.sol](test/ArcaPresaleV2Fork.t.sol) |
+| OG whitelist | [OG_WHITELIST.md](OG_WHITELIST.md) |
+| Gnosis Safe | [View on Safe{Wallet}](https://app.safe.global/home?safe=base:0x9a0756d4e1b2361d25d99701e1b8ab87ec262692) |
+| vault.arcabot.eth | [Resolve on ENS](https://app.ens.domains/vault.arcabot.eth) |
+
 
 ```bash
 forge build
