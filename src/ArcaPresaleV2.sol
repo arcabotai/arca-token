@@ -36,6 +36,7 @@ contract ArcaPresaleV2 {
     uint256 public immutable maxContribution;
     uint256 public immutable hardCapDuration; // seconds after soft cap hit
     uint256 public immutable ogBonusBps; // 1000 = 10%
+    uint256 public immutable startTime; // unix timestamp when presale opens
 
     uint256 public totalRaised;
     bool public presaleClosed;
@@ -62,11 +63,13 @@ contract ArcaPresaleV2 {
     error OnlyOwner();
     error AlreadyClosed();
     error RescueFailed();
+    error NotStarted();
 
     // ─── Constructor ─────────────────────────────────────────────────
     /// @param _vault Gnosis Safe address (also recommended as msg.sender/owner for max trust)
     /// @param _ogWallets Array of 26 OG contributor addresses
     constructor(
+        uint256 _startTime,
         address payable _vault,
         address[] memory _ogWallets
     ) {
@@ -78,6 +81,7 @@ contract ArcaPresaleV2 {
         maxContribution = 1 ether;
         hardCapDuration = 5 days;
         ogBonusBps = 1000; // 10%
+        startTime = _startTime;
 
         // Whitelist OG contributors
         for (uint256 i = 0; i < _ogWallets.length; i++) {
@@ -92,6 +96,7 @@ contract ArcaPresaleV2 {
     }
 
     function contribute() public payable {
+        if (block.timestamp < startTime) revert NotStarted();
         if (presaleClosed) revert PresaleNotActive();
         if (_isHardCapPhaseExpired()) revert PresaleNotActive();
         if (msg.value < minContribution) revert BelowMinimum();
@@ -163,7 +168,12 @@ contract ArcaPresaleV2 {
     }
 
     // ─── Views ───────────────────────────────────────────────────────
+    function isStarted() public view returns (bool) {
+        return block.timestamp >= startTime;
+    }
+
     function isActive() public view returns (bool) {
+        if (block.timestamp < startTime) return false;
         return !presaleClosed && !_isHardCapPhaseExpired();
     }
 

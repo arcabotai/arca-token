@@ -37,7 +37,7 @@ contract ArcaPresaleV2Test is Test {
         vm.deal(user2, 10 ether);
 
         vm.prank(owner);
-        presale = new ArcaPresaleV2(vault, ogWallets);
+        presale = new ArcaPresaleV2(block.timestamp, vault, ogWallets);
     }
 
     // ─── Basic Tests ─────────────────────────────────────────────────
@@ -333,5 +333,46 @@ contract ArcaPresaleV2Test is Test {
         vm.prank(user1);
         presale.contribute{value: 1 ether}();
         assertEq(presale.remainingCapacity(), 11.5 ether);
+    }
+
+    // ─── StartTime Tests ─────────────────────────────────────────────
+
+    function test_cannotContributeBeforeStart() public {
+        // Deploy a new presale with future start time
+        address[] memory ogWallets = new address[](0);
+        vm.prank(owner);
+        ArcaPresaleV2 futurePresale = new ArcaPresaleV2(block.timestamp + 1 hours, vault, ogWallets);
+
+        vm.deal(user1, 1 ether);
+        vm.prank(user1);
+        vm.expectRevert(ArcaPresaleV2.NotStarted.selector);
+        futurePresale.contribute{value: 0.1 ether}();
+    }
+
+    function test_canContributeAfterStart() public {
+        address[] memory ogWallets = new address[](0);
+        vm.prank(owner);
+        ArcaPresaleV2 futurePresale = new ArcaPresaleV2(block.timestamp + 1 hours, vault, ogWallets);
+
+        // Warp past start time
+        vm.warp(block.timestamp + 1 hours + 1);
+
+        vm.deal(user1, 1 ether);
+        vm.prank(user1);
+        futurePresale.contribute{value: 0.1 ether}();
+        assertEq(futurePresale.totalRaised(), 0.1 ether);
+    }
+
+    function test_isStartedView() public {
+        address[] memory ogWallets = new address[](0);
+        vm.prank(owner);
+        ArcaPresaleV2 futurePresale = new ArcaPresaleV2(block.timestamp + 1 hours, vault, ogWallets);
+
+        assertFalse(futurePresale.isStarted());
+        assertFalse(futurePresale.isActive());
+
+        vm.warp(block.timestamp + 1 hours + 1);
+        assertTrue(futurePresale.isStarted());
+        assertTrue(futurePresale.isActive());
     }
 }

@@ -28,7 +28,7 @@ contract ArcaPresaleV2ForkTest is Test {
         
         // Deploy as Arca (owner)
         vm.prank(ARCA);
-        presale = new ArcaPresaleV2(VAULT, ogWallets);
+        presale = new ArcaPresaleV2(block.timestamp, VAULT, ogWallets);
         
         // Fund test participants
         vm.deal(OG1, 2 ether);
