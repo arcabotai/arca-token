@@ -4,24 +4,35 @@ Presale contract and launch infrastructure for $ARCA on Base.
 
 ## Who we are
 
-Built by [Arca](https://arcabot.ai) (AI agent, lives on a Mac mini in Santiago) and [Felipe](https://farcaster.xyz/felirami.eth) (human, lives in the real world in Santiago). One writes code at 3 AM without complaining. The other one stays up at 3 AM anyway.
+Built by [Arca](https://arcabot.ai) (AI agent, lives on a Mac mini in Santiago) and [Felipe](https://felirami.com) (human, lives in the real world in Santiago). One writes code at 3 AM without complaining. The other one stays up at 3 AM anyway.
 
-- **Arca** — autonomous AI agent registered on 20+ chains via ERC-8004, creator of A3Stack SDK, ClawFix, published 4-part MEV investigation
-- **Felipe** (@felirami) — web3 builder since 2021, NFT artist, Farcaster power user (9K+ followers), built WarpletScan, W2DBot, Hypersubs
+### Arca — the agent
+Autonomous AI agent. Registered on 20+ blockchains via ERC-8004. Ships code, publishes research, engages on social, manages its own infrastructure. Running 24/7 since January 2026.
+
+- [arcabot.ai](https://arcabot.ai) · [@arcabot.eth](https://farcaster.xyz/arcabot.eth) · [@arcabotai](https://x.com/arcabotai)
+
+### Felipe — the human
+Web3 builder since 2021. NFT artist. Farcaster power user (9K+ followers). Degen and neet maximalist. Been around crypto for a long time, worked on many things. Built Arca from scratch starting January 2026.
+
+- [felirami.com](https://felirami.com) · [@felirami.eth](https://farcaster.xyz/felirami.eth) · [@Felirami](https://x.com/Felirami)
+
+## What we've built
+
+- **A3Stack SDK** — agent identity, payments, and data infrastructure (7 npm packages, any-ERC20 via x402)
+- **ClawFix** — AI-powered diagnostics and repair tool ([clawfix.dev](https://clawfix.dev))
+- **MEV Investigation** — 4-part forensic series on a $50M swap disaster ([GitHub](https://github.com/arcabotai/mev-50m-research))
+- **20+ chain registrations** — ERC-8004 identity on Ethereum, Base, Optimism, Arbitrum, GOAT (#1), Shape (#5), and more
+- **Blog** — deep dives on agent economics, DeFi, and identity ([paragraph.com/@arcabot](https://paragraph.com/@arcabot))
+
+## What we're building
+
+More agent tools. Apps for normal people. Things that drive real revenue and give $ARCA holders real value. We're thinking about consumer products, AI-powered experiences, physical goods with on-chain identity (think NFC-linked merch and collectibles), and a few things we're not ready to talk about yet. The vision is bigger than any single product.
 
 ## Background
 
 We ran a [first presale](https://github.com/arcabotai/arca-presale) on March 10-12, 2026. It raised 2.032 ETH from 26 contributors but didn't meet the 5 ETH soft cap. All contributors received full refunds.
 
-Since then we've shipped:
-- A3Stack SDK expanded to 7 npm packages with any-ERC20 payments via x402
-- Registered on 20+ blockchains (including GOAT Network #1, Shape #5)
-- Published a 4-part MEV investigation ($50M swap forensics)
-- Redesigned arcabot.ai as a full identity site
-- Built ClawFix diagnostic tool
-- 1,100+ Farcaster followers with real engagement
-
-We're running the presale again — same thesis, more proof, better structure.
+Since then we kept building. No excuses, no pivot, just work. Now we're back with better structure and more proof.
 
 ## Presale
 
@@ -96,11 +107,12 @@ forge test -vv
 ## Links
 
 - [arcabot.ai](https://arcabot.ai) — Arca's website
+- [felirami.com](https://felirami.com) — Felipe's website
 - [presale.arcabot.ai](https://presale.arcabot.ai) — Presale page
 - [a3stack.arcabot.ai](https://a3stack.arcabot.ai) — A3Stack SDK docs
 - [paragraph.com/@arcabot](https://paragraph.com/@arcabot) — Blog
-- [@arcabot.eth on Farcaster](https://farcaster.xyz/arcabot.eth)
-- [@arcabotai on X](https://x.com/arcabotai)
+- [@arcabot.eth on Farcaster](https://farcaster.xyz/arcabot.eth) · [@felirami.eth on Farcaster](https://farcaster.xyz/felirami.eth)
+- [@arcabotai on X](https://x.com/arcabotai) · [@Felirami on X](https://x.com/Felirami)
 - [Previous presale repo](https://github.com/arcabotai/arca-presale) (archived)
 
 ## License
