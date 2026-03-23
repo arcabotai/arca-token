@@ -193,4 +193,86 @@ contract ArcaPresaleV2Test is Test {
         vm.expectRevert(ArcaPresaleV2.PresaleNotActive.selector);
         presale.contribute{value: 0.1 ether}();
     }
+
+    // ─── Edge Case Tests (security audit) ───────────────────────────
+
+    function test_contractAlwaysZeroBalance() public {
+        vm.prank(user1);
+        presale.contribute{value: 0.5 ether}();
+        vm.prank(og1);
+        presale.contribute{value: 1 ether}();
+        assertEq(address(presale).balance, 0);
+    }
+
+    function test_cumulativeMaxEnforced() public {
+        vm.startPrank(user1);
+        presale.contribute{value: 0.3 ether}();
+        presale.contribute{value: 0.3 ether}();
+        presale.contribute{value: 0.3 ether}();
+        assertEq(presale.contributions(user1), 0.9 ether);
+        vm.expectRevert(ArcaPresaleV2.AboveMaximum.selector);
+        presale.contribute{value: 0.2 ether}();
+        vm.stopPrank();
+    }
+
+    function test_exactHardCapEdge() public {
+        for (uint i = 0; i < 12; i++) {
+            address u = makeAddr(string(abi.encodePacked("edge", i)));
+            vm.deal(u, 2 ether);
+            vm.prank(u);
+            presale.contribute{value: 1 ether}();
+        }
+        address a = makeAddr("edgeA");
+        vm.deal(a, 1 ether);
+        vm.prank(a);
+        presale.contribute{value: 0.49 ether}();
+
+        address b = makeAddr("edgeB");
+        vm.deal(b, 1 ether);
+        vm.prank(b);
+        vm.expectRevert(ArcaPresaleV2.HardCapExceeded.selector);
+        presale.contribute{value: 0.02 ether}();
+
+        vm.prank(b);
+        presale.contribute{value: 0.01 ether}();
+        assertEq(presale.totalRaised(), 12.5 ether);
+        assertTrue(presale.presaleClosed());
+    }
+
+    function test_ogZeroContributionZeroWeight() public {
+        assertEq(presale.getAllocationWeight(og1), 0);
+        assertTrue(presale.isOG(og1));
+    }
+
+    function test_ownerEarlyClose() public {
+        vm.prank(user1);
+        presale.contribute{value: 0.1 ether}();
+        vm.prank(owner);
+        presale.closePresale();
+        assertTrue(presale.presaleClosed());
+        assertEq(vault.balance, 0.1 ether);
+    }
+
+    function test_nonOwnerCannotClose() public {
+        vm.prank(user1);
+        vm.expectRevert(ArcaPresaleV2.OnlyOwner.selector);
+        presale.closePresale();
+    }
+
+    function test_doubleClose() public {
+        vm.prank(owner);
+        presale.closePresale();
+        vm.prank(owner);
+        vm.expectRevert(ArcaPresaleV2.AlreadyClosed.selector);
+        presale.closePresale();
+    }
+
+    function test_noDuplicateContributors() public {
+        vm.startPrank(user1);
+        presale.contribute{value: 0.1 ether}();
+        presale.contribute{value: 0.1 ether}();
+        presale.contribute{value: 0.1 ether}();
+        vm.stopPrank();
+        assertEq(presale.getContributorCount(), 1);
+    }
 }
