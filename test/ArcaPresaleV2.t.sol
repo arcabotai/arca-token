@@ -4,6 +4,18 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "../src/ArcaPresaleV2.sol";
 
+contract MockERC20 {
+    mapping(address => uint256) public balanceOf;
+    function transfer(address to, uint256 amount) external returns (bool) {
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+}
+
 contract ArcaPresaleV2Test is Test {
     ArcaPresaleV2 presale;
     address payable vault = payable(makeAddr("vault"));
@@ -28,6 +40,8 @@ contract ArcaPresaleV2Test is Test {
         presale = new ArcaPresaleV2(vault, ogWallets);
     }
 
+    // ─── Basic Tests ─────────────────────────────────────────────────
+
     function test_initialState() public view {
         assertEq(presale.softCap(), 5 ether);
         assertEq(presale.hardCap(), 12.5 ether);
@@ -39,6 +53,7 @@ contract ArcaPresaleV2Test is Test {
         assertTrue(presale.isOG(og1));
         assertTrue(presale.isOG(og2));
         assertFalse(presale.isOG(user1));
+        assertEq(presale.remainingCapacity(), 12.5 ether);
     }
 
     function test_contribute() public {
@@ -47,8 +62,9 @@ contract ArcaPresaleV2Test is Test {
 
         assertEq(presale.contributions(user1), 0.1 ether);
         assertEq(presale.totalRaised(), 0.1 ether);
-        assertEq(vault.balance, 0.1 ether); // forwarded immediately
+        assertEq(vault.balance, 0.1 ether);
         assertEq(presale.getContributorCount(), 1);
+        assertEq(presale.remainingCapacity(), 12.4 ether);
     }
 
     function test_contributeViaReceive() public {
@@ -61,10 +77,8 @@ contract ArcaPresaleV2Test is Test {
     function test_ogBonus() public {
         vm.prank(og1);
         presale.contribute{value: 1 ether}();
-
-        // OG gets 10% bonus weight
         assertEq(presale.getAllocationWeight(og1), 1.1 ether);
-        // Regular user gets 1:1
+        
         vm.prank(user1);
         presale.contribute{value: 1 ether}();
         assertEq(presale.getAllocationWeight(user1), 1 ether);
@@ -86,11 +100,9 @@ contract ArcaPresaleV2Test is Test {
     }
 
     function test_softCapTriggers() public {
-        // No deadline before soft cap
         assertEq(presale.softCapReachedAt(), 0);
         assertEq(presale.hardCapDeadline(), 0);
 
-        // Fill to soft cap with multiple users
         for (uint i = 0; i < 5; i++) {
             address u = makeAddr(string(abi.encodePacked("filler", i)));
             vm.deal(u, 2 ether);
@@ -101,18 +113,16 @@ contract ArcaPresaleV2Test is Test {
         assertEq(presale.totalRaised(), 5 ether);
         assertTrue(presale.softCapReachedAt() > 0);
         assertEq(presale.hardCapDeadline(), block.timestamp + 5 days);
-        assertTrue(presale.isActive()); // still active for hard cap phase
+        assertTrue(presale.isActive());
     }
 
     function test_hardCapCloses() public {
-        // Fill to hard cap
         for (uint i = 0; i < 12; i++) {
             address u = makeAddr(string(abi.encodePacked("whale", i)));
             vm.deal(u, 2 ether);
             vm.prank(u);
             presale.contribute{value: 1 ether}();
         }
-        // 12 ETH in, add 0.5 more
         address last = makeAddr("last");
         vm.deal(last, 1 ether);
         vm.prank(last);
@@ -124,24 +134,15 @@ contract ArcaPresaleV2Test is Test {
     }
 
     function test_timerExpiry() public {
-        // Hit soft cap
         for (uint i = 0; i < 5; i++) {
             address u = makeAddr(string(abi.encodePacked("timer", i)));
             vm.deal(u, 2 ether);
             vm.prank(u);
             presale.contribute{value: 1 ether}();
         }
-
-        // Still active
         assertTrue(presale.isActive());
-
-        // Warp past 5 days
         vm.warp(block.timestamp + 5 days + 1);
-
-        // Now expired
         assertFalse(presale.isActive());
-
-        // Anyone can close
         vm.prank(user1);
         presale.closePresale();
         assertTrue(presale.presaleClosed());
@@ -150,8 +151,6 @@ contract ArcaPresaleV2Test is Test {
     function test_noTimerBeforeSoftCap() public {
         vm.prank(user1);
         presale.contribute{value: 0.1 ether}();
-
-        // Warp 100 days — still active because soft cap not hit
         vm.warp(block.timestamp + 100 days);
         assertTrue(presale.isActive());
     }
@@ -161,10 +160,7 @@ contract ArcaPresaleV2Test is Test {
         presale.contribute{value: 0.5 ether}();
         vm.prank(og1);
         presale.contribute{value: 0.3 ether}();
-
-        // Contract holds nothing
         assertEq(address(presale).balance, 0);
-        // Vault has everything
         assertEq(vault.balance, 0.8 ether);
     }
 
@@ -178,10 +174,10 @@ contract ArcaPresaleV2Test is Test {
         
         assertEq(wallets.length, 2);
         assertEq(amounts[0], 0.5 ether);
-        assertEq(weights[0], 0.55 ether); // OG bonus
+        assertEq(weights[0], 0.55 ether);
         assertTrue(isOGList[0]);
         assertEq(amounts[1], 0.3 ether);
-        assertEq(weights[1], 0.3 ether); // no bonus
+        assertEq(weights[1], 0.3 ether);
         assertFalse(isOGList[1]);
     }
 
@@ -194,7 +190,87 @@ contract ArcaPresaleV2Test is Test {
         presale.contribute{value: 0.1 ether}();
     }
 
-    // ─── Edge Case Tests (security audit) ───────────────────────────
+    // ─── Partial Fill Tests ──────────────────────────────────────────
+
+    function test_partialFillAtHardCap() public {
+        // Fill to 12 ETH
+        for (uint i = 0; i < 12; i++) {
+            address u = makeAddr(string(abi.encodePacked("fill", i)));
+            vm.deal(u, 2 ether);
+            vm.prank(u);
+            presale.contribute{value: 1 ether}();
+        }
+        assertEq(presale.totalRaised(), 12 ether);
+        assertEq(presale.remainingCapacity(), 0.5 ether);
+
+        // User sends 1 ETH but only 0.5 fits — should partial fill
+        address partialUser = makeAddr("partial");
+        vm.deal(partialUser, 2 ether);
+        uint256 balBefore = partialUser.balance;
+        
+        vm.prank(partialUser);
+        presale.contribute{value: 1 ether}();
+
+        // Only 0.5 accepted, 0.5 returned
+        assertEq(presale.contributions(partialUser), 0.5 ether);
+        assertEq(presale.totalRaised(), 12.5 ether);
+        assertEq(partialUser.balance, balBefore - 0.5 ether); // got 0.5 back
+        assertTrue(presale.presaleClosed());
+        assertEq(vault.balance, 12.5 ether);
+    }
+
+    function test_partialFillSmallRemaining() public {
+        // Fill to 12.49 ETH
+        for (uint i = 0; i < 12; i++) {
+            address u = makeAddr(string(abi.encodePacked("small", i)));
+            vm.deal(u, 2 ether);
+            vm.prank(u);
+            presale.contribute{value: 1 ether}();
+        }
+        address a = makeAddr("smallA");
+        vm.deal(a, 1 ether);
+        vm.prank(a);
+        presale.contribute{value: 0.49 ether}();
+
+        // Only 0.01 ETH remaining — user sends 0.5 ETH
+        address b = makeAddr("smallB");
+        vm.deal(b, 1 ether);
+        uint256 balBefore = b.balance;
+
+        vm.prank(b);
+        presale.contribute{value: 0.5 ether}();
+
+        assertEq(presale.contributions(b), 0.01 ether);
+        assertEq(b.balance, balBefore - 0.01 ether); // got 0.49 back
+        assertEq(presale.totalRaised(), 12.5 ether);
+        assertTrue(presale.presaleClosed());
+    }
+
+    // ─── ERC-20 Rescue Tests ─────────────────────────────────────────
+
+    function test_rescueERC20() public {
+        MockERC20 token = new MockERC20();
+        token.mint(address(presale), 1000); // simulate accidental token transfer
+        assertEq(token.balanceOf(address(presale)), 1000);
+
+        // Owner rescues tokens
+        vm.prank(owner);
+        presale.rescueTokens(address(token), user1, 1000);
+
+        assertEq(token.balanceOf(address(presale)), 0);
+        assertEq(token.balanceOf(user1), 1000);
+    }
+
+    function test_rescueOnlyOwner() public {
+        MockERC20 token = new MockERC20();
+        token.mint(address(presale), 1000);
+
+        vm.prank(user1);
+        vm.expectRevert(ArcaPresaleV2.OnlyOwner.selector);
+        presale.rescueTokens(address(token), user1, 1000);
+    }
+
+    // ─── Edge Case Tests (security audit) ────────────────────────────
 
     function test_contractAlwaysZeroBalance() public {
         vm.prank(user1);
@@ -213,30 +289,6 @@ contract ArcaPresaleV2Test is Test {
         vm.expectRevert(ArcaPresaleV2.AboveMaximum.selector);
         presale.contribute{value: 0.2 ether}();
         vm.stopPrank();
-    }
-
-    function test_exactHardCapEdge() public {
-        for (uint i = 0; i < 12; i++) {
-            address u = makeAddr(string(abi.encodePacked("edge", i)));
-            vm.deal(u, 2 ether);
-            vm.prank(u);
-            presale.contribute{value: 1 ether}();
-        }
-        address a = makeAddr("edgeA");
-        vm.deal(a, 1 ether);
-        vm.prank(a);
-        presale.contribute{value: 0.49 ether}();
-
-        address b = makeAddr("edgeB");
-        vm.deal(b, 1 ether);
-        vm.prank(b);
-        vm.expectRevert(ArcaPresaleV2.HardCapExceeded.selector);
-        presale.contribute{value: 0.02 ether}();
-
-        vm.prank(b);
-        presale.contribute{value: 0.01 ether}();
-        assertEq(presale.totalRaised(), 12.5 ether);
-        assertTrue(presale.presaleClosed());
     }
 
     function test_ogZeroContributionZeroWeight() public {
@@ -274,5 +326,12 @@ contract ArcaPresaleV2Test is Test {
         presale.contribute{value: 0.1 ether}();
         vm.stopPrank();
         assertEq(presale.getContributorCount(), 1);
+    }
+
+    function test_remainingCapacityUpdates() public {
+        assertEq(presale.remainingCapacity(), 12.5 ether);
+        vm.prank(user1);
+        presale.contribute{value: 1 ether}();
+        assertEq(presale.remainingCapacity(), 11.5 ether);
     }
 }

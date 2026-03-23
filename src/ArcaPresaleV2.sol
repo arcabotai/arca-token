@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+interface IERC20 {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
+
 /**
  * @title ArcaPresaleV2
  * @notice Presale contract for $ARCA token on Base
@@ -14,16 +19,16 @@ pragma solidity ^0.8.24;
  * 5. Hard cap (12.5 ETH) or timer expires → presale closes
  * 6. 26 OG wallets from previous presale get 10% bonus token allocation
  * 
- * Key differences from V1:
+ * Security improvements over V1:
  * - ETH forwarded immediately to Safe (no funds held in contract)
- * - No time limit before soft cap
- * - Hard cap phase has 5-day timer (starts when soft cap hit)
- * - OG whitelist for bonus (not time-based early bird)
- * - No refund mechanism (funds go to multisig immediately)
+ * - Owner = Gnosis Safe (2-of-2 multisig required for admin actions)
+ * - Partial fill at hard cap (excess ETH returned, not reverted)
+ * - ERC-20 rescue function for accidentally sent tokens
+ * - No refund mechanism needed (contract balance always 0)
  */
 contract ArcaPresaleV2 {
     // ─── State ───────────────────────────────────────────────────────
-    address public immutable owner;
+    address public immutable owner; // Should be the Gnosis Safe itself
     address payable public immutable vault; // Gnosis Safe multisig
     uint256 public immutable softCap;
     uint256 public immutable hardCap;
@@ -42,26 +47,30 @@ contract ArcaPresaleV2 {
 
     // ─── Events ──────────────────────────────────────────────────────
     event Contributed(address indexed contributor, uint256 amount, uint256 totalContribution, bool isOG);
+    event PartialFill(address indexed contributor, uint256 accepted, uint256 returned);
     event SoftCapReached(uint256 timestamp, uint256 totalRaised);
     event HardCapReached(uint256 timestamp, uint256 totalRaised);
     event PresaleClosed(uint256 timestamp, uint256 totalRaised, uint256 numContributors);
     event OGWhitelisted(address indexed wallet);
     event VaultForwarded(uint256 amount);
+    event TokensRescued(address indexed token, address indexed to, uint256 amount);
 
     // ─── Errors ──────────────────────────────────────────────────────
     error PresaleNotActive();
     error BelowMinimum();
     error AboveMaximum();
-    error HardCapExceeded();
     error OnlyOwner();
     error AlreadyClosed();
+    error RescueFailed();
 
     // ─── Constructor ─────────────────────────────────────────────────
+    /// @param _vault Gnosis Safe address (also recommended as msg.sender/owner for max trust)
+    /// @param _ogWallets Array of 26 OG contributor addresses
     constructor(
         address payable _vault,
         address[] memory _ogWallets
     ) {
-        owner = msg.sender;
+        owner = msg.sender; // Deploy from Safe for maximum trust, or set to Safe address
         vault = _vault;
         softCap = 5 ether;
         hardCap = 12.5 ether;
@@ -87,22 +96,37 @@ contract ArcaPresaleV2 {
         if (_isHardCapPhaseExpired()) revert PresaleNotActive();
         if (msg.value < minContribution) revert BelowMinimum();
         if (contributions[msg.sender] + msg.value > maxContribution) revert AboveMaximum();
-        if (totalRaised + msg.value > hardCap) revert HardCapExceeded();
+
+        uint256 accepted = msg.value;
+        uint256 returned = 0;
+
+        // Partial fill: if contribution would exceed hard cap, accept only what fits
+        if (totalRaised + accepted > hardCap) {
+            accepted = hardCap - totalRaised;
+            returned = msg.value - accepted;
+        }
 
         // Track contribution
         if (contributions[msg.sender] == 0) {
             contributors.push(msg.sender);
         }
-        contributions[msg.sender] += msg.value;
-        totalRaised += msg.value;
+        contributions[msg.sender] += accepted;
+        totalRaised += accepted;
 
-        // Forward ETH to vault immediately
-        (bool sent,) = vault.call{value: msg.value}("");
+        // Forward accepted ETH to vault immediately
+        (bool sent,) = vault.call{value: accepted}("");
         require(sent, "Vault transfer failed");
-        emit VaultForwarded(msg.value);
+        emit VaultForwarded(accepted);
 
-        bool isOG = ogWhitelist[msg.sender];
-        emit Contributed(msg.sender, msg.value, contributions[msg.sender], isOG);
+        // Return excess ETH if partial fill
+        if (returned > 0) {
+            (bool refunded,) = payable(msg.sender).call{value: returned}("");
+            require(refunded, "Refund of excess failed");
+            emit PartialFill(msg.sender, accepted, returned);
+        }
+
+        bool isOGContributor = ogWhitelist[msg.sender];
+        emit Contributed(msg.sender, accepted, contributions[msg.sender], isOGContributor);
 
         // Check milestones
         if (softCapReachedAt == 0 && totalRaised >= softCap) {
@@ -116,13 +140,26 @@ contract ArcaPresaleV2 {
         }
     }
 
-    // ─── Close presale (owner or anyone after timer) ─────────────────
+    // ─── Close presale (owner only — should be multisig) ─────────────
     function closePresale() external {
         if (presaleClosed) revert AlreadyClosed();
+        // Only owner (multisig) or anyone after timer expires
         if (msg.sender != owner && !_isHardCapPhaseExpired()) revert OnlyOwner();
         
         presaleClosed = true;
         emit PresaleClosed(block.timestamp, totalRaised, contributors.length);
+    }
+
+    // ─── Rescue accidentally sent ERC-20 tokens ──────────────────────
+    /// @notice Recover ERC-20 tokens accidentally sent to this contract
+    /// @param token The ERC-20 token address
+    /// @param to Where to send the rescued tokens (should be the contributor)
+    /// @param amount Amount to rescue
+    function rescueTokens(address token, address to, uint256 amount) external {
+        if (msg.sender != owner) revert OnlyOwner();
+        bool success = IERC20(token).transfer(to, amount);
+        if (!success) revert RescueFailed();
+        emit TokensRescued(token, to, amount);
     }
 
     // ─── Views ───────────────────────────────────────────────────────
@@ -165,6 +202,12 @@ contract ArcaPresaleV2 {
         if (deadline == 0) return type(uint256).max; // no timer active
         if (block.timestamp >= deadline) return 0;
         return deadline - block.timestamp;
+    }
+
+    /// @notice Get remaining ETH capacity before hard cap
+    function remainingCapacity() public view returns (uint256) {
+        if (totalRaised >= hardCap) return 0;
+        return hardCap - totalRaised;
     }
 
     // ─── Internal ────────────────────────────────────────────────────

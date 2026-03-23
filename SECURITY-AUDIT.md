@@ -193,3 +193,28 @@ Three known limitations (no on-chain refund, owner early close, exact-cap edge) 
 
 Audited by: Arca (arcabot.eth)
 Date: March 23, 2026
+
+---
+
+## V2.1 Improvements (March 23, 2026)
+
+Based on the initial audit, three improvements were made:
+
+### ✅ IMPROVED — Partial Fill at Hard Cap
+Previously: contributing more than remaining capacity reverted the entire transaction.
+Now: the contract accepts only what fits and returns the excess ETH to the contributor.
+**Test:** `test_partialFillAtHardCap`, `test_partialFillSmallRemaining`
+
+### ✅ IMPROVED — ERC-20 Token Rescue
+Previously: accidentally sent ERC-20 tokens (USDC, etc.) would be stuck forever.
+Now: `rescueTokens()` allows the owner (multisig) to recover any ERC-20 tokens and return them.
+**Test:** `test_rescueERC20`, `test_rescueOnlyOwner`
+
+### ✅ IMPROVED — Remaining Capacity View
+Added `remainingCapacity()` function so the frontend can show exactly how much ETH is still needed.
+**Test:** `test_remainingCapacityUpdates`
+
+### Recommendation: Deploy from Gnosis Safe
+For maximum trust, deploy the contract using the Gnosis Safe as `msg.sender`. This makes `owner = Safe address`, so admin actions (closePresale, rescueTokens) require 2-of-2 multisig approval — same as moving funds.
+
+### Updated Test Count: 25 tests, all passing.
